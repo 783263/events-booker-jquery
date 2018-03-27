@@ -1,4 +1,3 @@
-
 (function ($) {
   $.fn.basket = function (conf) {
     var $self = this,
@@ -13,6 +12,7 @@
       addBasketItemToContainer($basketItem);
       runBasketItemShowAnimation($basketItem);
       linkItems($item, $basketItem);
+      emitBasketChangeEvent();
     }
 
     this.deleteItem = function ($item) {
@@ -24,6 +24,7 @@
           delBasketItemFromContainer($basketItem);
         });
       }
+      emitBasketChangeEvent();
     }
 
     this.getAllItems = function () {
@@ -39,6 +40,10 @@
         basketItem: $basketItem,
         item: $item
       });
+    }
+
+    function emitBasketChangeEvent() {
+      $self.trigger('basketchange');
     }
 
     function fetchLinkedDataForItem($item) {
@@ -227,6 +232,7 @@
       if (checkChangeInputValue($item, newInputValue)) {
         updateInputValue($item, newInputValue);
         updateOrderValue($item, orderValue);
+        emitBasketChange()
       }
     }
 
@@ -382,7 +388,7 @@
       var $inputField = $('<input />').attr('type', 'number')
         .attr('name', '')
         .val(data.orderValue)
-        .addClass('cart_num form-control')
+        .addClass('cart_num')
         .appendTo($container)
         .prop('disabled', data.type === 'hotel_room');
 
@@ -392,7 +398,10 @@
         .appendTo($container);
 
       var $textareaContent = $('<textarea placeholder="notatka" class="tear_c text_customer radius tAreaComment"/>');
+      $textareaContent.val(data.note);
+
       $textareaContent.change(function () {
+        $item.data('note', $textareaContent.val());
         if ($textareaContent.val() === '') {
           $commentIcon.removeClass('fa-commenting').addClass('fa-commenting-o');
         } else {
@@ -406,6 +415,11 @@
           fieldValue = +($(this).val() || 0),
           newInputValue = +(data.value || 0) + fieldValue,
           orderValue;
+
+        if (fieldValue <= 0) {
+          $(this).val(1);
+          return;
+        }
 
         if (data.type === 'hotel_room' || !checkChangeInputValue($item, newInputValue)) {
           orderValue = + (data.orderValue || 0);
@@ -429,7 +443,7 @@
 
     function _dataStandardizer(data) {
       var ret = {},
-        standardKeysInOrder = ['_id', 'event_id', 'id', 'type', 'title', 'name', 'date', 'value', 'orderValue', 'max'],
+        standardKeysInOrder = ['_id', 'event_id', 'id', 'type', 'title', 'name', 'date', 'value', 'orderValue', 'max', 'note'],
         dataType = data.type,
         dataKey,
         valKey,
@@ -446,7 +460,7 @@
             function (data) {
               return parseInt(data.value || 0, 10) - parseInt(data.uexists || 0, 10);
             },
-            'uexists', 'umax'
+            'uexists', 'umax', 'note'
           ],
           'hotel_room': [
             '_id', 'event_id', null, 'type', 'event_name',
@@ -460,7 +474,7 @@
             function (data) {
               return parseInt(data.value || 0, 10) - parseInt(data.uexists || 0, 10);
             },
-            'uexists', 'roommax'
+            'uexists', 'roommax', 'note'
           ],
           'hotel_data': [
             '_id', 'event_id', null, 'type', 'event_name', null,
@@ -470,16 +484,16 @@
             function (data) {
               return parseInt(data.value || 0, 10) - parseInt(data.uexists || 0, 10);
             },
-            null, null
+            null, null, null
           ]
         };
 
       for (i = 0; i < standardKeysInOrder.length; i++) {
         dataKey = standardKeysInOrder[i];
         valKey = map[dataType][i];
-        dataValue = valKey ? (typeof valKey === 'function' ? valKey(data) : data[valKey]) : null;
+        dataValue = valKey ? (typeof valKey === 'function' ? valKey(data) : (data[valKey] || null)) : null;
 
-        ret[standardKeysInOrder[i]] = dataValue;
+        ret[dataKey] = dataValue;
       }
       return ret;
     }
@@ -513,18 +527,24 @@
       return $basket.getItemsCount() === 0;
     }
 
-    function handleFormChange() {
+    function setSaveButtonStatus() {
       //var itemsNameList = ['customer', 'kontakt', 'email'];
-      if (validCustomerField() && validContactField() && validEmailField() && !isBasketEmpty()) {
+      if (validCustomerField() && validContactField() && !isBasketEmpty()) {
         enableSaveButton();
       } else {
         disableSaveButton();
       }
     }
 
-    function addBasketClientDataEvents() {
+    function addFormListener() {
       $('.cart_header > textarea').on('change keyup', function (event) {
-        handleFormChange();
+        setSaveButtonStatus();
+      });
+    }
+
+    function addBasketListener() {
+      $basket.on('basketchange', function () {
+        setSaveButtonStatus();
       });
     }
 
@@ -538,18 +558,32 @@
       });
     }
 
+    function getFormData() {
+      var data = {};
+      $('.cart_header > textarea[name]').each(function () {
+        $current = $(this);
+        data[$current.attr('name')] = $current.val();
+      })
+      Object.assign(data, $lwField.data());
+      return data;
+    }
+
+    function getBasketData() {
+      var items = $basket.getAllItems();
+      return items.map(function (current) {
+        var data = Object.assign({}, current.item.data());
+        data.date = data.date.getTime() / 1000;
+        return data;
+      });
+    }
+
     function saveBasket() {
-      var items = $basket.getAllItems(),
-        item = null,
-        dataToSend = [];
-      for (var index = 0; index < items.length; index++) {
-        item = items[index].item;
-        dataToSend.push(item.data());
-      }
-      $.post('', JSON.stringify(dataToSend.map((item) => {
-        item.date = item.date.getTime() / 1000;
-        return item;
-      })))
+      var dataToSend = getFormData(),
+        basketData = {
+          data: getBasketData()
+        }
+      dataToSend = Object.assign(dataToSend, basketData);
+      $.post ( b_url + '/book/json' , JSON.stringify(dataToSend) )
         .done(doAfterSuccessfulBasketSave)
         .fail(doAfterFailSave);
     }
@@ -560,13 +594,19 @@
 
     function doAfterSuccessfulBasketSave(data) {
       console.log(data);
+      location.replace(b_url);
+    }
+
+    function emitBasketChange() {
+      $basket.trigger('basketchange');
     }
 
     initItems();
     addLWEvent();
     addSaveButtonEvent();
     disableSaveButton();
-    addBasketClientDataEvents();
+    addFormListener();
+    addBasketListener();
 
     return this;
   }
