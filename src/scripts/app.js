@@ -388,7 +388,7 @@
       var $inputField = $('<input />').attr('type', 'number')
         .attr('name', '')
         .val(data.orderValue)
-        .addClass('cart_num form-control')
+        .addClass('cart_num')
         .appendTo($container)
         .prop('disabled', data.type === 'hotel_room');
 
@@ -583,7 +583,7 @@
           data: getBasketData()
         }
       dataToSend = Object.assign(dataToSend, basketData);
-      $.post('save.php', dataToSend)
+      $.post ( b_url + '/book/json' , JSON.stringify(dataToSend) )
         .done(doAfterSuccessfulBasketSave)
         .fail(doAfterFailSave);
     }
@@ -594,6 +594,7 @@
 
     function doAfterSuccessfulBasketSave(data) {
       console.log(data);
+      location.replace(b_url);
     }
 
     function emitBasketChange() {
