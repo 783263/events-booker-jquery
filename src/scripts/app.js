@@ -202,10 +202,10 @@
 
     function initAddAllRoomsButton() {
       function generateAddAllRoomsButton() {
-        var $button = $('<button/>', {
-          text: 'all'
+        var $button = $('<i/>', {
+          text: ''
         });
-        $button.addClass('btn btn-primary add_all');
+        $button.addClass('fa fa-check-square-o add_all');
 
         return $button;
       };
